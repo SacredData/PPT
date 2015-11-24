@@ -164,11 +164,12 @@ class PPT:
         for c in mult_command:
             cc_output += c
             cc_output += " "
-        print("Insert the following command string into your FFmpeg wrapper: ")
-        print(cc_output)
-        # print("Beginning compatability encodes... (3/3)")
-        # sp.check_output(mult_command, stderr=sp.STDOUT)
-        # print("Done!")
+        # print("Insert the following command string into your FFmpeg wrapper: ")
+        # print(cc_output)
+        sh_output = 'ffmpeg -y -i ' + str(self.webm_ref) + ' ' + cc_output
+        f = open("ffmpeg.sh","w")
+        f.write(sh_output)
+        f.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
