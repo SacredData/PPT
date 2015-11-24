@@ -25,6 +25,12 @@ class PPT:
         self.cpus = int(multiprocessing.cpu_count()) - 1
 
     def analyze(self, filename):
+        """
+        Run analysis on the input file, ensuring that the media file
+        contains a valid video stream. The data collected from this
+        analysis is to inform all other methods within this class.
+        Therefore, it is a MUST RUN. :)
+        """
         self.filename = filename
         try:
             open(self.filename)
@@ -70,6 +76,10 @@ class PPT:
         print("New target bitrate: " + str(self.target))
 
     def build_y4m(self):
+        """
+        Create the Y4M file, which will serve as the reference video data
+        from which we will make our reference VP8 and VP9 streams.
+        """
         print("Converting source video stream to Y4M rawvideo container.")
         y4m_start = [FFMPEG_BIN, '-y', '-i', self.filename]
         y4m_codec = self.opts['formats']['y4m']['codec'].split(' ')
@@ -81,6 +91,10 @@ class PPT:
         print("Y4M creation complete.")
 
     def build_audio(self):
+        """
+        Extract the video container's audio stream and encode the data
+        into both OGG Vorbis (vp8) and OPUS (vp9).
+        """
         print("Stream copying source audio to WAV for OGG conversion.")
         self.wav_in = self.filename + '.wav'
         wav_cmd = [FFMPEG_BIN, '-y', '-i', self.filename, '-vn', '-sn', '-map',
@@ -137,12 +151,16 @@ class PPT:
         sp.check_output(ffmpeg_copy_vp9, stderr=sp.STDOUT)
 
     def multi_webm(self):
+        """
+        Create the multi_webm FFmpeg shell script and execute it.
+        NOTE: this method outputs a string to a shell script for execution.
+        For this reason, IT MAY NOT BE SAFE TO RUN IN EVERY USE-CASE.
+        This is done in order to allow the server admin to designate niceness
+        on a per-job basis. Regardless, Python's subprocess module cannot
+        reconcile the canonical FFmpeg syntax required to run this command.
+        """
         # Now that the primary encodes are done, we can make the compatability
         # encodes. These are to be created from the initial 2-pass encode.
-        # Note: this method outputs a string to a shell script for execution.
-        # This is done in order to allow the server admin to designate niceness
-        # on a per-job basis. Regardless, Python's subprocess module cannot
-        # reconcile the canonical FFmpeg syntax required to run this command.
         if self.video_stream["coded_height"] >= 1080:
             mult_begin = 'webm_1080'
         elif self.video_stream["coded_height"] >= 720:
