@@ -19,7 +19,7 @@ class PPT:
     Probe a video file for validity and metadata. Use this gathered metadata
     to design an FFmpeg transcode command that is optimized for high quality
     output of short durations.
-    USAGE: python probevideo.py -f /path/to/file.ext
+    USAGE: python ppt.py -f /path/to/file.ext
     """
 
     def __init__(self, filename):
