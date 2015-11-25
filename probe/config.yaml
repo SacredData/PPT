@@ -7,7 +7,7 @@ formats:
    vp8:
     vpxenc   : vpxenc --codec=vp8 --good --cpu-used=0 --end-usage=vbr --bias-pct=50 --kf-max-dist=240 --auto-alt-ref=1 --lag-in-frames=16 --token-parts=3 --drop-frame=0 -p 2 -t 3
    vp9:
-    vpxenc   : vpxenc --codec=vp9 --cpu-used=0 --end-usage=2 --cq-level=10 --kf-max-dist=240 -p 2 -t 3
+    vpxenc   : vpxenc --codec=vp9 --cpu-used=0 --end-usage=2 --cq-level=10 --kf-max-dist=240 -p 2 -t 4
    webm1:
     options  : -f webm -pass 1
     codec    : -c:v libvpx -c:a libvorbis -quality realtime -cpu-used 3 -threads 7
@@ -20,53 +20,53 @@ scales_30:
    webm_1080:
     complex  : '"[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[int0];[int0]split=5[in1][in2][in3][in4][in5];[in1]scale=-1:1080[int1];[int1]scale=trunc(iw/2)*2:trunc(ih/2)*2[out1];[in2]scale=-1:720[int2];[int2]scale=trunc(iw/2)*2:trunc(ih/2)*2[out2];[in3]scale=-1:480[int3];[int3]scale=trunc(iw/2)*2:trunc(ih/2)*2[out3];[in4]scale=-1:360[int4];[int4]scale=trunc(iw/2)*2:trunc(ih/2)*2[out4];[in5]scale=-1:280[int5];[int5]scale=trunc(iw/2)*2:trunc(ih/2)*2[out5]"'
     mapping:
-      out1   : -c:v libvpx -b:v 3600k -c:a copy webm/vp8/output_1080.webm
-      out2   : -c:v libvpx -b:v 2400k -c:a copy webm/vp8/output_720.webm
-      out3   : -c:v libvpx -b:v 1200k -c:a copy webm/vp8/output_480.webm
-      out4   : -c:v libvpx -b:v 600k -minrate 600k -maxrate 600k -c:a copy webm/vp8/output_360.webm
-      out5   : -c:v libvpx -b:v 340k -minrate 340k -maxrate 340k -c:a copy webm/vp8/output_280.webm
+      out1   : -c:v libvpx -b:v 3600k -c:a libvorbis output_1080.webm
+      out2   : -c:v libvpx -b:v 2400k -c:a libvorbis output_720.webm
+      out3   : -c:v libvpx -b:v 1200k -c:a libvorbis output_480.webm
+      out4   : -c:v libvpx -b:v 600k -minrate 600k -maxrate 600k -c:a libvorbis output_360.webm
+      out5   : -c:v libvpx -b:v 340k -minrate 340k -maxrate 340k -c:a libvorbis output_280.webm
    webm_720:
     complex  : '"[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[int0];[int0]split=4[in1][in2][in3][in4];[in1]scale=-1:720[int1];[int1]scale=trunc(iw/2)*2:trunc(ih/2)*2[out1];[in2]scale=-1:480[int2];[int2]scale=trunc(iw/2)*2:trunc(ih/2)*2[out2];[in3]scale=-1:360[int3];[int3]scale=trunc(iw/2)*2:trunc(ih/2)*2[out3];[in4]scale=-1:280[int4];[int4]scale=trunc(iw/2)*2:trunc(ih/2)*2[out4]"'
     mapping:
-      out1   : -c:v libvpx -b:v 2400k -c:a copy webm/vp8/output_720.webm
-      out2   : -c:v libvpx -b:v 1200k -c:a copy webm/vp8/output_480.webm
-      out3   : -c:v libvpx -b:v 600k -minrate 600k -maxrate 600k -c:a copy webm/vp8/output_360.webm
-      out4   : -c:v libvpx -b:v 340k -minrate 340k -maxrate 340k -c:a copy webm/vp8/output_280.webm
+      out1   : -c:v libvpx -b:v 2400k -c:a libvorbis output_720.webm
+      out2   : -c:v libvpx -b:v 1200k -c:a libvorbis output_480.webm
+      out3   : -c:v libvpx -b:v 600k -minrate 600k -maxrate 600k -c:a libvorbis output_360.webm
+      out4   : -c:v libvpx -b:v 340k -minrate 340k -maxrate 340k -c:a libvorbis output_280.webm
    webm_480:
     complex  : '"[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[int0];[int0]split=3[in1][in2][in3];[in1]scale=-1:480[int1];[int1]scale=trunc(iw/2)*2:trunc(ih/2)*2[out1];[in2]scale=-1:360[int2];[int2]scale=trunc(iw/2)*2:trunc(ih/2)*2[out2];[in3]scale=-1:280[int3];[int3]scale=trunc(iw/2)*2:trunc(ih/2)*2[out3]"'
     mapping:
-      out1   : -c:v libvpx -b:v 1200k -c:a copy webm/vp8/output_480.webm
-      out2   : -c:v libvpx -b:v 600k -minrate 600k -maxrate 600k -c:a copy webm/vp8/output_360.webm
-      out3   : -c:v libvpx -b:v 340k -minrate 340k -maxrate 340k -c:a copy webm/vp8/output_280.webm
+      out1   : -c:v libvpx -b:v 1200k -c:a libvorbis output_480.webm
+      out2   : -c:v libvpx -b:v 600k -minrate 600k -maxrate 600k -c:a libvorbis output_360.webm
+      out3   : -c:v libvpx -b:v 340k -minrate 340k -maxrate 340k -c:a libvorbis output_280.webm
    webm_360:
     complex  : '"[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[int0];[int0]split=2[in1][in2];[in1]scale=-1:360[int1];[int1]scale=trunc(iw/2)*2:trunc(ih/2)*2[out1];[in2]scale=-1:280[int2];[int2]scale=trunc(iw/2)*2:trunc(ih/2)*2[out2]"'
     mapping:
-      out1   : -c:v libvpx -b:v 600k -minrate 600k -maxrate 600k -c:a copy webm/vp8/output_360.webm
-      out2   : -c:v libvpx -b:v 340k -minrate 340k -maxrate 340k -c:a copy webm/vp8/output_280.webm
+      out1   : -c:v libvpx -b:v 600k -minrate 600k -maxrate 600k -c:a libvorbis output_360.webm
+      out2   : -c:v libvpx -b:v 340k -minrate 340k -maxrate 340k -c:a libvorbis output_280.webm
 scales_60:
    webm_1080:
     complex  : '"[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[int0];[int0]split=5[in1][in2][in3][in4][in5];[in1]scale=-1:1080[int1];[int1]scale=trunc(iw/2)*2:trunc(ih/2)*2[out1];[in2]scale=-1:720[int2];[int2]scale=trunc(iw/2)*2:trunc(ih/2)*2[out2];[in3]scale=-1:480[int3];[int3]scale=trunc(iw/2)*2:trunc(ih/2)*2[out3];[in4]scale=-1:360[int4];[int4]scale=trunc(iw/2)*2:trunc(ih/2)*2[out4];[in5]scale=-1:280[int5];[int5]scale=trunc(iw/2)*2:trunc(ih/2)*2[out5]"'
     mapping:
-      out1   : -c:v libvpx -b:v 6600k -minrate 4000k -maxrate 8000k -bufsize 14M -c:a copy webm/vp8/output_1080.webm
-      out2   : -c:v libvpx -b:v 4400k -minrate 3000k -maxrate 5000k -bufsize 10M -c:a copy webm/vp8/output_720.webm
-      out3   : -c:v libvpx -b:v 2200k -minrate 1000k -maxrate 3400k -bufsize 8M -c:a copy webm/vp8/output_480.webm
-      out4   : -c:v libvpx -b:v 1200k -minrate 800k -maxrate 1800k -c:a copy webm/vp8/output_360.webm
-      out5   : -c:v libvpx -b:v 640k -minrate 340k -maxrate 1240k -c:a copy webm/vp8/output_280.webm
+      out1   : -c:v libvpx -b:v 6600k -minrate 4000k -maxrate 8000k -bufsize 14M -c:a libvorbis output_1080.webm
+      out2   : -c:v libvpx -b:v 4400k -minrate 3000k -maxrate 5000k -bufsize 10M -c:a libvorbis output_720.webm
+      out3   : -c:v libvpx -b:v 2200k -minrate 1000k -maxrate 3400k -bufsize 8M -c:a libvorbis output_480.webm
+      out4   : -c:v libvpx -b:v 1200k -minrate 800k -maxrate 1800k -c:a libvorbis output_360.webm
+      out5   : -c:v libvpx -b:v 640k -minrate 340k -maxrate 1240k -c:a libvorbis output_280.webm
    webm_720:
     complex  : '"[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[int0];[int0]split=4[in1][in2][in3][in4];[in1]scale=-1:720[int1];[int1]scale=trunc(iw/2)*2:trunc(ih/2)*2[out1];[in2]scale=-1:480[int2];[int2]scale=trunc(iw/2)*2:trunc(ih/2)*2[out2];[in3]scale=-1:360[int3];[int3]scale=trunc(iw/2)*2:trunc(ih/2)*2[out3];[in4]scale=-1:280[int4];[int4]scale=trunc(iw/2)*2:trunc(ih/2)*2[out4]"'
     mapping:
-      out1   : -c:v libvpx -b:v 4400k -minrate 3000k -maxrate 5000k -bufsize 10M -c:a copy webm/vp8/output_720.webm
-      out2   : -c:v libvpx -b:v 2200k -minrate 1000k -maxrate 3400k -bufsize 8M -c:a copy webm/vp8/output_480.webm
-      out3   : -c:v libvpx -b:v 1200k -minrate 800k -maxrate 1800k -c:a copy webm/vp8/output_360.webm
-      out4   : -c:v libvpx -b:v 640k -minrate 340k -maxrate 1240k -c:a copy webm/vp8/output_280.webm
+      out1   : -c:v libvpx -b:v 4400k -minrate 3000k -maxrate 5000k -bufsize 10M -c:a libvorbis output_720.webm
+      out2   : -c:v libvpx -b:v 2200k -minrate 1000k -maxrate 3400k -bufsize 8M -c:a libvorbis output_480.webm
+      out3   : -c:v libvpx -b:v 1200k -minrate 800k -maxrate 1800k -c:a libvorbis output_360.webm
+      out4   : -c:v libvpx -b:v 640k -minrate 340k -maxrate 1240k -c:a libvorbis output_280.webm
    webm_480:
     complex  : '"[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[int0];[int0]split=3[in1][in2][in3];[in1]scale=-1:480[int1];[int1]scale=trunc(iw/2)*2:trunc(ih/2)*2[out1];[in2]scale=-1:360[int2];[int2]scale=trunc(iw/2)*2:trunc(ih/2)*2[out2];[in3]scale=-1:280[int3];[int3]scale=trunc(iw/2)*2:trunc(ih/2)*2[out3]"'
     mapping:
-      out1   : -c:v libvpx -b:v 2200k -minrate 1000k -maxrate 3400k -bufsize 8M -c:a copy webm/vp8/output_480.webm
-      out2   : -c:v libvpx -b:v 1200k -minrate 800k -maxrate 1800k -c:a copy webm/vp8/output_360.webm
-      out3   : -c:v libvpx -b:v 640k -minrate 340k -maxrate 1240k -c:a copy webm/vp8/output_280.webm
+      out1   : -c:v libvpx -b:v 2200k -minrate 1000k -maxrate 3400k -bufsize 8M -c:a libvorbis output_480.webm
+      out2   : -c:v libvpx -b:v 1200k -minrate 800k -maxrate 1800k -c:a libvorbis output_360.webm
+      out3   : -c:v libvpx -b:v 640k -minrate 340k -maxrate 1240k -c:a libvorbis output_280.webm
    webm_360:
     complex  : '"[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[int0];[int0]split=2[in1][in2];[in1]scale=-1:360[int1];[int1]scale=trunc(iw/2)*2:trunc(ih/2)*2[out1];[in2]scale=-1:280[int2];[int2]scale=trunc(iw/2)*2:trunc(ih/2)*2[out2]"'
     mapping:
-      out1   : -c:v libvpx -b:v 1200k -minrate 800k -maxrate 1800k -c:a copy webm/vp8/output_360.webm
-      out2   : -c:v libvpx -b:v 640k -minrate 340k -maxrate 1240k -c:a copy webm/vp8/output_280.webm
+      out1   : -c:v libvpx -b:v 1200k -minrate 800k -maxrate 1800k -c:a libvorbis output_360.webm
+      out2   : -c:v libvpx -b:v 640k -minrate 340k -maxrate 1240k -c:a libvorbis output_280.webm
