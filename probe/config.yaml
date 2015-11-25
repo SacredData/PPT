@@ -2,12 +2,12 @@ inopts : -y
 formats:
    y4m:
     options  : -f yuv4mpegpipe 
-    codec    : -c:v rawvideo -an -sn -pix_fmt yuv420p -threads 8
+    codec    : -c:v rawvideo -an -sn -pix_fmt yuv420p -threads 4
     extension: y4m
    vp8:
-    vpxenc   : vpxenc --codec=vp8 --good --cpu-used=0 --end-usage=vbr --bias-pct=50 --kf-max-dist=240 --auto-alt-ref=1 --lag-in-frames=16 --token-parts=3 --drop-frame=0 -p 2 -t 2
+    vpxenc   : vpxenc --codec=vp8 --good --cpu-used=0 --end-usage=vbr --bias-pct=50 --kf-max-dist=240 --auto-alt-ref=1 --lag-in-frames=16 --token-parts=3 --drop-frame=0 -p 2 -t 3
    vp9:
-    vpxenc   : vpxenc --codec=vp9 --cpu-used=0 --end-usage=2 --cq-level=10 --kf-max-dist=240 -p 2 -t 7
+    vpxenc   : vpxenc --codec=vp9 --cpu-used=0 --end-usage=2 --cq-level=10 --kf-max-dist=240 -p 2 -t 4
    webm1:
     options  : -f webm -pass 1
     codec    : -c:v libvpx -c:a libvorbis -quality realtime -cpu-used 3 -threads 7

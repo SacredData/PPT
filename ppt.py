@@ -1,13 +1,16 @@
+from multiprocessing import Lock, Pool
 import argparse
-import multiprocessing
 import json
+import fcntl
 import subprocess as sp
 import yaml
+import multiprocessing as mp
 
 FFMPEG_BIN = 'ffmpeg'
 FFPROBE_BIN = 'ffprobe'
 CFILE = open('probe/config.yaml', 'r')
 CONFIG = yaml.load_all(CFILE)
+output = mp.Queue()
 
 
 class PPT:
@@ -19,25 +22,69 @@ class PPT:
     USAGE: python probevideo.py -f /path/to/file.ext
     """
 
-    def __init__(self):
+    def __init__(self, filename):
         for data in CONFIG:
             self.opts = data
-        self.cpus = int(multiprocessing.cpu_count()) - 1
+        self.cpus = int(mp.cpu_count())
+        self.proc_max = round(self.cpus / 1.5)
+        if self.proc_max < 4:
+            print("Ahh, hell nah! You need 6 cores to play, son!")
+            return
+        self.filename = filename
+        lock = Lock()
+        # Lock the file so that other processes don't mess with our shizz.
+        try:
+            x = open(self.filename)
+            fcntl.flock(x, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except IOError:
+            print("The given file failed to be opened!!!")
+            print("Filename:" + self.filename)
+            return
+        br = self.prepare()
+        if br:
+            fcntl.flock(x, fcntl.LOCK_UN)  # unlock input file
+            x.close()
+            self.build_vids(lock, br)  # start the intense stuff
 
-    def analyze(self, filename):
+    def prepare(self):
+        bitrate = False
+        sources = [
+            mp.Process(target=self.analyze), mp.Process(
+                target=self.build_audio),
+            mp.Process(target=self.build_y4m)]
+        for p in sources:
+            p.start()
+        for p in sources:
+            p.join()
+        src = [output.get() for p in sources]
+        print(src)
+        if all((src[0], src[1], src[2])):
+            print("Source build successful!")
+            bitrate = src[0]
+            height = src[1]
+            print("Proceeding with target bitrate of", str(bitrate))
+        return [bitrate, height]
+
+    def build_vids(self, l, br):
+        l.acquire()
+        y4m = self.filename + '.y4m'
+        vpx = ['vp8', 'vp9']
+        # vp8_ref = self.build_vpx(y4m, br, 'vp8')
+        # if vp8_ref:
+        with Pool(processes=2) as pool:
+            results = [
+                pool.apply_async(self.build_vpx, args=(y4m, br, x)) for x in vpx]
+            procpool = [par.get() for par in results]
+        print(procpool)
+        l.release()
+
+    def analyze(self):
         """
         Run analysis on the input file, ensuring that the media file
         contains a valid video stream. The data collected from this
         analysis is to inform all other methods within this class.
         Therefore, it is a MUST RUN. :)
         """
-        self.filename = filename
-        try:
-            open(self.filename)
-        except IOError:
-            print("The given file failed to be opened!!!")
-            print("Filename:" + self.filename)
-            return
         # If the file can be opened we may begin analyzing the container
         analyze = [FFPROBE_BIN, '-v', 'quiet', '-show_format', '-show_streams',
                    '-print_format', 'json', self.filename]
@@ -72,8 +119,21 @@ class PPT:
             min_rate = round(new_mbps * 0.85)
             max_rate = round(new_mbps * 1.5)
             buf_size = round(max_rate * 1.75)
-        self.target = new_mbps * 1000
-        print("New target bitrate: " + str(self.target))
+        target = new_mbps * 1000
+        output.put(target)
+        if self.video_stream["coded_height"] >= 1080:
+            mult_begin = 'webm_1080'
+        elif self.video_stream["coded_height"] >= 720:
+            mult_begin = 'webm_720'
+        elif self.video_stream["coded_height"] >= 480:
+            mult_begin = 'webm_480'
+        elif self.video_stream["coded_height"] >= 720:
+            mult_begin = 'webm_360'
+        else:
+            mult_begin = 'webm_280'
+        print("New target bitrate: " + str(target))
+        print("Video height: " + str(self.video_stream["coded_height"]))
+        output.put(mult_begin)
 
     def build_y4m(self):
         """
@@ -84,11 +144,12 @@ class PPT:
         y4m_start = [FFMPEG_BIN, '-y', '-i', self.filename]
         y4m_codec = self.opts['formats']['y4m']['codec'].split(' ')
         y4m_opts = self.opts['formats']['y4m']['options'].split(' ')
-        self.y4m_out = self.filename + '.y4m'
-        y4m_cmd = y4m_start + y4m_codec + y4m_opts + [self.y4m_out]
+        y4m_out = self.filename + '.y4m'
+        y4m_cmd = y4m_start + y4m_codec + y4m_opts + [y4m_out]
         print(y4m_cmd)
         sp.check_output(y4m_cmd, stderr=sp.STDOUT)
         print("Y4M creation complete.")
+        output.put(True)
 
     def build_audio(self):
         """
@@ -110,47 +171,40 @@ class PPT:
         opus_cmd = ['opusenc', '--bitrate', '160', self.wav_in, self.opus_out]
         sp.check_output(opus_cmd, stderr=sp.STDOUT)
         print("OPUS encoding complete.")
+        output.put(True)
 
-    def build_vp8(self):
-        print("Converting source video to VP8 stream.")
-        y4m_in = self.filename + '.y4m'
-        vp8_opts = self.opts['formats']['vp8']['vpxenc'].split(' ')
-        self.vp8_out = self.filename + '.vp8.webm'
-        vp8_bits = '--target-bitrate=' + str(self.target)
-        vp8_args = [vp8_bits, '-o', self.vp8_out, y4m_in]
-        vp8_cmd = vp8_opts + vp8_args
-        print(vp8_cmd)
-        sp.check_output(vp8_cmd, stderr=sp.STDOUT)
-        print("VP8 conversion complete.")
+    def build_vpx(self, y4m, target, vp='vp8'):
+        print("Converting source video to stream:  ", vp)
+        vp_opts = self.opts['formats'][vp]['vpxenc'].split(' ')
+        vp_out = self.filename + '.' + str(vp) + '.webm'
+        vp_bits = '--target-bitrate=' + str(target[0])
+        vp_args = [vp_bits, '-o', vp_out, y4m]
+        vp_cmd = vp_opts + vp_args
+        try:
+            sp.check_output(vp_cmd, stderr=sp.STDOUT)
+        finally:
+            print(vp, " conversion complete:  ", vp_out)
+            ref_webm = self.build_webm(vp_out, vp)
+            mult_webm = self.multi_webm(ref_webm, target[1])
+            return [vp, vp_out, ref_webm, True]
 
-    def build_vp9(self):
-        print("Converting source video to VP9 stream.")
-        y4m_in = self.filename + '.y4m'
-        self.vp9_out = self.filename + '.vp9.webm'
-        vp9_target = int(self.target / 1.5)
-        vp9_opts = self.opts['formats']['vp9']['vpxenc'].split(' ')
-        vp9_bits = '--target-bitrate=' + str(vp9_target)
-        vp9_args = [vp9_bits, '-o', self.vp9_out, y4m_in]
-        vp9_cmd = vp9_opts + vp9_args
-        print(vp9_cmd)
-        sp.check_output(vp9_cmd, stderr=sp.STDOUT)
-        print("VP9 conversion complete.")
-
-    def build_webm(self):
-        self.webm_ref = self.filename + '.ref.webm'
-        self.vp8_ref = '.vp8' + self.webm_ref
-        self.vp9_ref = '.vp9' + self.webm_ref
+    def build_webm(self, vp_in, vpx='vp8'):
+        vpref = vp_in + '.' + vpx + '.webm'
         # Put it all together
-        ffmpeg_copy_vp8 = [FFMPEG_BIN, '-y', '-i', self.vp8_out, '-i',
-                           self.ogg_out, '-c', 'copy', '-flags',
-                           '+global_header', self.vp8_ref]
-        sp.check_output(ffmpeg_copy_vp8, stderr=sp.STDOUT)
-        ffmpeg_copy_vp9 = [FFMPEG_BIN, '-y', '-i', self.vp9_out, '-i',
-                           self.opus_out, '-c', 'copy', '-flags',
-                           '+global_header', self.vp9_ref]
-        sp.check_output(ffmpeg_copy_vp9, stderr=sp.STDOUT)
+        if vpx in 'vp8':
+            audio = self.filename + '.ogg'
+            webm_streamcopy = [FFMPEG_BIN, '-y', '-i', vp_in, '-i',
+                               audio, '-c', 'copy', '-flags',
+                               '+global_header', vpref]
+        elif vpx in 'vp9':
+            audio = self.filename + '.opus'
+            webm_streamcopy = [FFMPEG_BIN, '-y', '-i', vp_in, '-i',
+                               audio, '-c', 'copy', '-flags',
+                               '+global_header', vpref]
+        sp.check_output(webm_streamcopy, stderr=sp.STDOUT)
+        return vpref
 
-    def multi_webm(self):
+    def multi_webm(self, ref, mult_begin, fps=30):
         """
         Create the multi_webm FFmpeg shell script and execute it.
         NOTE: this method outputs a string to a shell script for execution.
@@ -159,20 +213,18 @@ class PPT:
         on a per-job basis. Regardless, Python's subprocess module cannot
         reconcile the canonical FFmpeg syntax required to run this command.
         """
+        try:
+            y = open(ref)
+            fcntl.flock(y, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except IOError:
+            print("The given file failed to be opened!!!")
+            print("Filename: " + ref)
+            return
         # Now that the primary encodes are done, we can make the compatability
         # encodes. These are to be created from the initial 2-pass encode.
-        if self.video_stream["coded_height"] >= 1080:
-            mult_begin = 'webm_1080'
-        elif self.video_stream["coded_height"] >= 720:
-            mult_begin = 'webm_720'
-        elif self.video_stream["coded_height"] >= 480:
-            mult_begin = 'webm_480'
-        elif self.video_stream["coded_height"] >= 720:
-            mult_begin = 'webm_360'
-        else:
-            mult_begin = 'webm_280'
+        print("Beginning with the ", mult_begin, " profile.")
         # Determine which FPS scale the video outputs get
-        fps = self.video_stream["r_frame_rate"]
+        fps = str(30)  # self.video_stream["r_frame_rate"]
         fps_scale = eval(fps)
         fps_mult = [30, 60]
         if min(fps_mult, key=lambda x: abs(x - fps_scale)) == 60:
@@ -191,7 +243,7 @@ class PPT:
             for fc in map_cmd:
                 mult_map.append(fc)
             map_num += 1
-        mult_start = [FFMPEG_BIN, '-y', '-i', self.webm_ref]
+        mult_start = [FFMPEG_BIN, '-y', '-i', ref]
         mult_command = ['-filter_complex'] + mult_complex + mult_map
         mult_sh = mult_start + mult_command
         print("Multiple-bitrate compatability encodes:")
@@ -204,17 +256,13 @@ class PPT:
         f.write(cc_output)
         f.close()
         sp.check_output(['sh', 'ffmpeg.sh'], stderr=sp.STDOUT)
+        fcntl.flock(y, fcntl.LOCK_UN)  # unlock input file
+        y.close()
+        return True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--file')
     args = parser.parse_args()
     print(args.file)
-    p = PPT()
-    p.analyze(args.file)  # Grab the file, probe for validity, analyze metadata
-    p.build_y4m()  # Create the source file for use on x264 and VP8 ref videos
-    p.build_audio()  # Grab the file's audio stream, output OGG+OPUS
-    p.build_vp8()  # Create the VP8 stream for insertion into WebM container
-    p.build_vp9()  # Create the VP9 stream for insertion into WebM container
-    p.build_webm()  # Build the reference WebM file, from which all others stem
-    p.multi_webm()  # Create multi-output FFmpeg script for all other WebMs
+    p = PPT(args.file)
