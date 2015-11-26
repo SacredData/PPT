@@ -93,7 +93,7 @@ class PPT:
         for p in procpool:
             print("Results for ", p[0], ":  ")
             print("Video Stream Data:  ", p[1])
-            print("Success:  ", p[3])
+            print("Success:  ", p[2])
         l.release()
 
     def analyze(self):
@@ -132,7 +132,7 @@ class PPT:
         else:
             new_mbps = round(new_mbps)
             # Determine minimum+maximum bit rate + buffer size
-        target = new_mbps * 1000 * 2
+        target = new_mbps * 1000 * 1.5
         output.put(target)
         if self.video_stream["coded_height"] >= 1080:
             mult_begin = 'webm_1080'
@@ -226,7 +226,7 @@ class PPT:
             print("Ah, snap! Subprocess error.")
             print("Error: ", vp, " conversion.")
             return
-        self.multi_webm(vp_out, target[1])
+        # self.multi_webm(vp_out, target[1])
         return [vp, vp_out, True]
 
     def multi_webm(self, ref, mult_begin, fps=60):
@@ -292,4 +292,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args.file)
     p = PPT(args.file)
-
