@@ -26,8 +26,7 @@ class PPT:
         for data in CONFIG:
             self.opts = data
         self.cpus = int(mp.cpu_count())
-        self.proc_max = round(self.cpus / 1.5)
-        if self.proc_max < 4:
+        if self.cpus < 4:
             print("Ahh, hell nah! You need 6 cores to play, son!")
             return
         self.filename = filename
