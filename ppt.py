@@ -68,7 +68,7 @@ class PPT:
     def build_vids(self, l, br):
         l.acquire()
         y4m = self.filename + '.y4m'
-        vpx = ['vp8', 'vp9']
+        vpx = ['vp9']
         with Pool(processes=2) as pool:
             results = [
                 pool.apply_async(self.build_vpx, args=(y4m, br, x)) for x in vpx]
@@ -227,21 +227,19 @@ class PPT:
             for fc in map_cmd:
                 mult_map.append(fc)
             map_num += 1
-        encpasses = 2
-        for r in range(1, encpasses):
-            mult_start = [FFMPEG_BIN, '-y', '-i', ref, '-pass', str(r)]
-            mult_command = ['-filter_complex'] + mult_complex + mult_map
-            mult_sh = mult_start + mult_command
-            print("Multiple-bitrate compatability encodes:")
-            print(mult_sh)
-            cc_output = ""
-            for c in mult_sh:
-                cc_output += c
-                cc_output += " "
-            f = open("ffmpeg.sh", "w")
-            f.write(cc_output)
-            f.close()
-            sp.check_output(['sh', 'ffmpeg.sh'], stderr=sp.STDOUT)
+        mult_start = [FFMPEG_BIN, '-y', '-i', ref, '-pass', str(r)]
+        mult_command = ['-filter_complex'] + mult_complex + mult_map
+        mult_sh = mult_start + mult_command
+        print("Multiple-bitrate compatability encodes:")
+        print(mult_sh)
+        cc_output = ""
+        for c in mult_sh:
+            cc_output += c
+            cc_output += " "
+        f = open("ffmpeg.sh", "w")
+        f.write(cc_output)
+        f.close()
+        sp.check_output(['sh', 'ffmpeg.sh'], stderr=sp.STDOUT)
         fcntl.flock(y, fcntl.LOCK_UN)  # unlock input file
         y.close()
         return True
