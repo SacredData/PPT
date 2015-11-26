@@ -2,7 +2,7 @@ inopts : -y
 formats:
    y4m:
     options  : -f yuv4mpegpipe 
-    codec    : -c:v rawvideo -an -sn -pix_fmt yuv420p -threads 7
+    codec    : -c:v rawvideo -an -sn -pix_fmt yuv420p -threads 0
     extension: y4m
    vp8:
     vpxenc   : vpxenc --codec=vp8 --i420 --tune=ssim --good --cpu-used=0 --end-usage=cq --cq-level=6 --kf-max-dist=240 --auto-alt-ref=1 --lag-in-frames=16 --token-parts=2 --drop-frame=0 --buf-initial-sz=4000 --buf-optimal-sz=5000 --buf-sz=6000 --resize-allowed=1 --resize-down=15 -p 2 -t 4
