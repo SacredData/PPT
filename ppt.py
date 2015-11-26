@@ -63,19 +63,21 @@ class PPT:
             bitrate = src[0]
             height = src[1]
             print("Proceeding with target bitrate of", str(bitrate))
+        bitrate = int(bitrate * 2)
         return [bitrate, height]
 
     def build_vids(self, l, br):
         l.acquire()
         y4m = self.filename + '.y4m'
         vpx = ['vp8', 'vp9']
-        # vp8_ref = self.build_vpx(y4m, br, 'vp8')
-        # if vp8_ref:
         with Pool(processes=2) as pool:
             results = [
                 pool.apply_async(self.build_vpx, args=(y4m, br, x)) for x in vpx]
             procpool = [par.get() for par in results]
-        print(procpool)
+        for p in procpool:
+            print("Results for ", p[0], ":  ")
+            print("Video Stream Data:  ", p[1])
+            print("Success:  ", p[3])
         l.release()
 
     def analyze(self):
@@ -119,7 +121,7 @@ class PPT:
             min_rate = round(new_mbps * 0.85)
             max_rate = round(new_mbps * 1.5)
             buf_size = round(max_rate * 1.75)
-        target = new_mbps * 1000
+        target = new_mbps * 1000 * 2
         output.put(target)
         if self.video_stream["coded_height"] >= 1080:
             mult_begin = 'webm_1080'
@@ -184,25 +186,8 @@ class PPT:
             sp.check_output(vp_cmd, stderr=sp.STDOUT)
         finally:
             print(vp, " conversion complete:  ", vp_out)
-            ref_webm = self.build_webm(vp_out, vp)
-            mult_webm = self.multi_webm(ref_webm, target[1])
-            return [vp, vp_out, ref_webm, True]
-
-    def build_webm(self, vp_in, vpx='vp8'):
-        vpref = vp_in + '.' + vpx + '.webm'
-        # Put it all together
-        if vpx in 'vp8':
-            audio = self.filename + '.ogg'
-            webm_streamcopy = [FFMPEG_BIN, '-y', '-i', vp_in, '-i',
-                               audio, '-c', 'copy', '-flags',
-                               '+global_header', vpref]
-        elif vpx in 'vp9':
-            audio = self.filename + '.opus'
-            webm_streamcopy = [FFMPEG_BIN, '-y', '-i', vp_in, '-i',
-                               audio, '-c', 'copy', '-flags',
-                               '+global_header', vpref]
-        sp.check_output(webm_streamcopy, stderr=sp.STDOUT)
-        return vpref
+            self.multi_webm(vp_out, target[1])
+            return [vp, vp_out, True]
 
     def multi_webm(self, ref, mult_begin, fps=30):
         """
@@ -243,19 +228,21 @@ class PPT:
             for fc in map_cmd:
                 mult_map.append(fc)
             map_num += 1
-        mult_start = [FFMPEG_BIN, '-y', '-i', ref]
-        mult_command = ['-filter_complex'] + mult_complex + mult_map
-        mult_sh = mult_start + mult_command
-        print("Multiple-bitrate compatability encodes:")
-        print(mult_sh)
-        cc_output = ""
-        for c in mult_sh:
-            cc_output += c
-            cc_output += " "
-        f = open("ffmpeg.sh", "w")
-        f.write(cc_output)
-        f.close()
-        sp.check_output(['sh', 'ffmpeg.sh'], stderr=sp.STDOUT)
+        encpasses = 2
+        for r in range(1, encpasses):
+            mult_start = [FFMPEG_BIN, '-y', '-i', ref, '-pass', str(r)]
+            mult_command = ['-filter_complex'] + mult_complex + mult_map
+            mult_sh = mult_start + mult_command
+            print("Multiple-bitrate compatability encodes:")
+            print(mult_sh)
+            cc_output = ""
+            for c in mult_sh:
+                cc_output += c
+                cc_output += " "
+            f = open("ffmpeg.sh", "w")
+            f.write(cc_output)
+            f.close()
+            sp.check_output(['sh', 'ffmpeg.sh'], stderr=sp.STDOUT)
         fcntl.flock(y, fcntl.LOCK_UN)  # unlock input file
         y.close()
         return True
