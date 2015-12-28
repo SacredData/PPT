@@ -3,6 +3,7 @@ import argparse
 import json
 import fcntl
 import subprocess as sp
+import sys
 import yaml
 import multiprocessing as mp
 
@@ -20,7 +21,7 @@ class PPT:
     to design an FFmpeg transcode command that is optimized for high quality
     output of short durations.
     USAGE: python ppt.py -f /path/to/file.ext
-    The script operates under the following parallel workflow:
+    The script operates under the following synchronous workflow:
     INPUT_VIDEO -> [OGG, OPUS]  +  [Y4M] -----> [VPx] -------> [WebM]
                       audio       rawvideo     vp8/vp9         vp8/vp9
                         |            |            |               |
@@ -32,24 +33,22 @@ class PPT:
     def __init__(self, filename):
         """
         All a user should need to do is supply the initialize method with
-        a valid video stream file. The script/class will do the rest.
+        a valid video stream file. The class will do the rest.
         """
         for data in CONFIG:
             self.opts = data
         self.cpus = int(mp.cpu_count())
         if self.cpus < 4:
-            print("Ahh, hell nah! You need 4 cores to play, son!")
-            return
-        self.filename = filename
+            sys.exit("Ahh, hell nah! You need 4 cores to play, son!")
         lock = Lock()
         # Lock the file so that other processes don't mess with our shizz.
         try:
-            x = open(self.filename)
+            x = open(filename)
             fcntl.flock(x, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.filename = filename
         except IOError:
-            print("The given file failed to be opened!!!")
-            print("Filename:" + self.filename)
-            return
+            er_desc = filename + " cannot be opened. Cannot continue."
+            sys.exit(str(er_desc))
         br = self.prepare()
         if br:
             fcntl.flock(x, fcntl.LOCK_UN)  # unlock input file
@@ -67,14 +66,15 @@ class PPT:
         for p in sources:
             p.join()
         src = [output.get() for p in sources]
-        print(src)
         if all((src[0], src[1], src[2])):
-            print("Source build successful!")
             bitrate = src[0]
             height = src[1]
-            print("Proceeding with target bitrate of", str(bitrate))
-        bitrate = int(bitrate * 2)
-        return [bitrate, height]
+            print("Source build successful! \
+                Proceeding with target bitrate of", str(bitrate))
+        else:
+            sys.exit("Source build data missing! Cannot continue.")
+        # bitrate = int(bitrate * 2)
+        return [int(bitrate * 2), height]
 
     def build_vids(self, l, br):
         """
@@ -106,14 +106,15 @@ class PPT:
         analyze = [FFPROBE_BIN, '-v', 'quiet', '-show_format', '-show_streams',
                    '-print_format', 'json', self.filename]
         probe_data = sp.check_output(analyze, bufsize=10**8, stderr=sp.STDOUT)
-        self.probe_res = json.loads(
+        probe_res = json.loads(
             probe_data.decode(encoding='UTF-8'), 'latin-1')
-        self.analysis = json.dumps(self.probe_res, indent=4)
-        stm_data = self.probe_res["streams"]
+        stm_data = probe_res["streams"]
         for stream in stm_data:
             if stream["codec_type"] in 'video':
                 self.video_stream = stream
                 print("Found video stream in the file.")
+            else:
+                sys.exit("Error: No video stream found! Cannot continue.")
         print(self.video_stream)
         mbps = int(self.video_stream["bit_rate"]) / 1000000
         # Determine new bitrate when source bit rate is too high to stream
@@ -131,7 +132,7 @@ class PPT:
             new_mbps = round(new_mbps)
         else:
             new_mbps = round(new_mbps)
-            # Determine minimum+maximum bit rate + buffer size
+        # Determine minimum+maximum bit rate + buffer size
         target = new_mbps * 1000 * 2
         output.put(target)
         if self.video_stream["coded_height"] >= 1080:
@@ -153,21 +154,18 @@ class PPT:
         Create the Y4M file, which will serve as the reference video data
         from which we will make our reference VP8 and VP9 streams.
         """
-        print("Converting source video stream to Y4M rawvideo container.")
         y4m_start = [FFMPEG_BIN, '-y', '-i', self.filename]
         y4m_codec = self.opts['formats']['y4m']['codec'].split(' ')
         y4m_opts = self.opts['formats']['y4m']['options'].split(' ')
         y4m_out = self.filename + '.y4m'
         y4m_cmd = y4m_start + y4m_codec + y4m_opts + [y4m_out]
-        print(y4m_cmd)
+        print("Converting source video stream to Y4M rawvideo container.")
         try:
             sp.check_output(y4m_cmd, stderr=sp.STDOUT)
             print("Y4M creation complete.")
             output.put(True)
         except sp.SubprocessError:
-            print("Ah, snap! Subprocess error.")
-            print("Error: Y4M rawvideo generation")
-            return
+            sys.exit("Error: Y4M rawvideo generation failed. Cannot continue.")
 
     def build_audio(self):
         """
@@ -177,34 +175,38 @@ class PPT:
         print("Stream copying source audio to WAV for OGG conversion.")
         try:
             wav_in = self.filename + '.wav'
-            wav_cmd = [FFMPEG_BIN, '-y', '-i', self.filename, '-vn', '-sn', '-map',
-                       '0:a', wav_in]
+            wav_cmd = [FFMPEG_BIN, '-y', '-i', self.filename, '-vn', '-sn',
+                       '-map', '0:a', wav_in]
             sp.check_output(wav_cmd, stderr=sp.STDOUT)
         except sp.SubprocessError:
-            print("Ah, snap! Subprocess error.")
-            print("Error: WAV audio extraction")
+            print("Error: WAV audio extraction failed. Where da audio at?")
             return
-        print("Converting source audio into OGG Vorbis for WebM stream copy.")
-        try:
-            ogg_out = self.filename + '.ogg'
-            ogg_start = ['oggenc', wav_in, '-o', ogg_out]
-            sp.check_output(ogg_start, stderr=sp.STDOUT)
-            print("OGG Vorbis conversion complete.")
-        except sp.SubprocessError:
-            print("Ah, snap! Subprocess error.")
-            print("Error: OGG Vorbis conversion")
-            return
-        print("Encoding WAV audio into OPUS for WebM stream copy.")
-        try:
-            self.opus_out = self.filename + '.opus'
-            opus_cmd = ['opusenc', '--bitrate', '160', wav_in, self.opus_out]
-            sp.check_output(opus_cmd, stderr=sp.STDOUT)
-            print("OPUS encoding complete.")
-        except sp.SubprocessError:
-            print("Ah, snap! Subprocess error.")
-            print("Error: OPUS conversion")
-            return
-        output.put(True)  # True means it worked!
+        else:
+            audio_res = 0
+            print("Generating OGG Vorbis from WAV audio.")
+            try:
+                ogg_out = self.filename + '.ogg'
+                ogg_start = ['oggenc', wav_in, '-o', ogg_out]
+                sp.check_output(ogg_start, stderr=sp.STDOUT)
+                print("OGG Vorbis conversion complete.")
+            except sp.SubprocessError:
+                print("Error: OGG Vorbis conversion failed! However, we will \
+                    continue to attempt generating the other audio formats.")
+                audio_res += 1
+            print("Generating OPUS from WAV audio.")
+            try:
+                self.opus_out = self.filename + '.opus'
+                opus_cmd = ['opusenc', '--bitrate', '160', wav_in,
+                            self.opus_out]
+                sp.check_output(opus_cmd, stderr=sp.STDOUT)
+                print("OPUS encoding complete.")
+            except sp.SubprocessError:
+                print("Error: OPUS conversion failed!")
+                audio_res += 1
+            if audio_res > 0:
+                output.put(False)  # WebM shouldn't attempt audio
+            else:
+                output.put(True)   # WebM should attempt audio
 
     def build_vpx(self, y4m, target, vp='vp8'):
         """
@@ -223,7 +225,6 @@ class PPT:
             sp.check_output(vp_cmd, stderr=sp.STDOUT)
             print(vp, " conversion complete:  ", vp_out)
         except sp.SubprocessError:
-            print("Ah, snap! Subprocess error.")
             print("Error: ", vp, " conversion.")
             return
         self.multi_webm(vp_out, target[1])
@@ -235,27 +236,24 @@ class PPT:
         NOTE: this method outputs a string to a shell script for execution.
         For this reason, IT MAY NOT BE SAFE TO RUN IN EVERY USE-CASE.
         This is done in order to allow the server admin to designate niceness
-        on a per-job basis. Regardless, Python's subprocess module cannot
-        reconcile the canonical FFmpeg syntax required to run this command.
+        on a per-job basis.
         """
         try:
             y = open(ref)
             fcntl.flock(y, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except IOError:
-            print("The given file failed to be opened!!!")
-            print("Filename: " + ref)
+            print("Filename: " + ref + " failed to be opened!")
             return
         # Now that the primary encodes are done, we can make the compatability
         # encodes. These are to be created from the initial 2-pass encode.
         print("Beginning with the ", mult_begin, " profile.")
-        # Determine which FPS scale the video outputs get
-        fps = str(60)  # self.video_stream["r_frame_rate"]
+        fps = str(60)
         fps_scale = eval(fps)
         fps_mult = [30, 60]
         if min(fps_mult, key=lambda x: abs(x - fps_scale)) == 60:
-            scale = 'scales_60'  # 60 fps bitrate
+            scale = 'scales_60'  # 60 fps bitrate. Progressive scanning!
         else:
-            scale = 'scales_30'  # 30 fps bitrate
+            scale = 'scales_30'  # 30 fps bitrate. Consider using yadif?
         # Create the complex filter graph FFmpeg command
         mult_complex = [self.opts[scale][mult_begin]['complex']]
         mult_mapping = self.opts[scale][mult_begin]['mapping']
@@ -271,17 +269,16 @@ class PPT:
         mult_start = [FFMPEG_BIN, '-y', '-i', ref]
         mult_command = ['-filter_complex'] + mult_complex + mult_map
         mult_sh = mult_start + mult_command
-        print("Multiple-bitrate compatability encodes:")
-        print(mult_sh)
+        print("Multiple-bitrate compatability encodes:  " + mult_sh)
         # Get the FFmpeg arguments ready for output to shell script
         cc_output = ""
         for c in mult_sh:
             cc_output += c
             cc_output += " "
-        f = open("ffmpeg.sh", "w")  # this is our shell script file
+        f = open("ffmpeg.sh", "w")
         f.write(cc_output)
         f.close()
-        sp.check_output(['sh', 'ffmpeg.sh'], stderr=sp.STDOUT)  # execute script
+        sp.check_output(['sh', 'ffmpeg.sh'], stderr=sp.STDOUT)
         fcntl.flock(y, fcntl.LOCK_UN)  # unlock input file
         y.close()
         return True
